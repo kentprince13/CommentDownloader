@@ -1,0 +1,17 @@
+﻿@model CommentDownloader.Models.InputViewModel
+
+@{
+    ViewBag.Title = "Notify";
+}
+
+<h2>Notify</h2>
+@if (Model.CommentLength.Equals(0))
+{
+    @: <h3> No Comment on this Link</h3>
+}
+else
+{
+       <h3>@Model.CommentLength Comments Export to music root folder </h3>
+}
+
+
