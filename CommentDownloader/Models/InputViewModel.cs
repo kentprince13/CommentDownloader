@@ -5,9 +5,10 @@ using System.Web;
 
 namespace CommentDownloader.Models
 {
-    public class InputViewModel
+    public  class InputViewModel
     {
         public string InputUrl { get; set; }
         public int CommentLength { get; set; }
+        public static string ErrorMessage { get; set; }
     }
 }

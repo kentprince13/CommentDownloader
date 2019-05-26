@@ -2,15 +2,15 @@
 @model CommentDownloader.Models.InputViewModel
 
 @{
-    ViewBag.Title = "title";
+    ViewBag.Title = "Youtube downloader";
    
 }
 
-<h2>title</h2>
+<h2>YouTube Downoad</h2>
 @using(Html.BeginForm("Comment", "Comment"))
 { 
     <div class="form-group">
         @Html.TextBoxFor( m=>m.InputUrl, new{@id ="urlTxt",@placeholder="Enter URL...", @class ="form-control"})
     </div>
-    <input type="submit" name="name" value="Submit" />
+    <input type="submit" class="btn btn-primary" name="name" value="Submit" />
 }

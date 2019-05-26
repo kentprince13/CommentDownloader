@@ -6,6 +6,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Web;
 using System.Web.Mvc;
 using CommentDownloader.Models;
@@ -23,21 +24,78 @@ namespace CommentDownloader.Controllers
             return View();
         }
 
-       
+        private const string YoutubeLinkRegex = "(?:.+?)?(?:\\/v\\/|watch\\/|\\?v=|\\&v=|youtu\\.be\\/|\\/v=|^youtu\\.be\\/)([a-zA-Z0-9_-]{11})+";
+        private static Regex regexExtractId = new Regex(YoutubeLinkRegex, RegexOptions.Compiled);
+        private static string[] validAuthorities = { "youtube.com", "www.youtube.com", "youtu.be", "www.youtu.be" };
+
+        public string ExtractVideoIdFromUri(Uri uri)
+        {
+            try
+            {
+
+                string authority = new UriBuilder(uri).Uri.Authority.ToLower();
+
+                //check if the url is a youtube url
+                if (validAuthorities.Contains(authority))
+                {
+                    //and extract the id
+                    var regRes = regexExtractId.Match(uri.ToString());
+                    if (regRes.Success)
+                    {
+                        return regRes.Groups[1].Value;
+                    }
+                }
+            }
+            catch
+            {
+                InputViewModel.ErrorMessage = "sorry invalid links";
+               
+            }
+
+
+            return null;
+        }
         [HttpPost]
         public ActionResult Comment(InputViewModel viewModel)
         {
-            
-            var videoUrl = viewModel.InputUrl;
-            if (videoUrl.IsNullOrWhiteSpace() || !videoUrl.Contains("youtube.com/watch?v="))
+            try
+            {
+                var videoUrl = viewModel.InputUrl;
+                if (videoUrl.IsNullOrWhiteSpace())
+                {InputViewModel.ErrorMessage= " Sorry Invalid Link";
+                    return View("Err");
+                }
+                   
+
+                var firstUrlFormatId = "";
+                var otherUrlFormatId = "";
+
+                if (videoUrl.Contains("youtube.com/watch?v="))
+                {
+                    firstUrlFormatId = videoUrl;
+                }
+                else
+                {
+                    otherUrlFormatId = ExtractVideoIdFromUri(new Uri(videoUrl, UriKind.Absolute));
+                }
+                var urlStrings = firstUrlFormatId.Split('=');
+
+                var videoId = (firstUrlFormatId.IsNullOrWhiteSpace()) ? otherUrlFormatId : urlStrings[1];
+
+                var youTubeUrl = $"/youtube/v3/commentThreads?part=snippet&maxResults=100&order=time&videoId={videoId}&key=[key]";
+                YouTubeComments(viewModel, youTubeUrl, videoId);
+
                 return View("Notify", viewModel);
+            }
+            catch
+            {
 
-            var urlStrings = videoUrl.Split('=');
-            var videoId = urlStrings[1];
-            var youTubeUrl = $"/youtube/v3/commentThreads?part=snippet&maxResults=100&order=time&videoId={videoId}&key=AIzaSyDcXc9agwa4geoXqMmHj2gTea10BvxvX_0";
-            YouTubeComments(viewModel, youTubeUrl, videoId);
 
-            return View("Notify",viewModel);
+                InputViewModel.ErrorMessage = "error0000";
+                return View("Err");
+               
+            }
+           
         }
 
         private static void YouTubeComments(InputViewModel viewModel, string youTubeUrl, string videoId)
@@ -61,13 +119,13 @@ namespace CommentDownloader.Controllers
                 }
                 else
                 {
-                    ProcessYouTubeComments(viewModel, items, commentList, convertToJson, videoId, client);
+                    ProcessMoreYouTubeComments(viewModel, items, commentList, convertToJson, videoId, client);
                 }
             }
         }
 
 
-        private static void ProcessYouTubeComments(InputViewModel viewModel, JToken items, List<CommentViewModel> commentList,
+        private static void ProcessMoreYouTubeComments(InputViewModel viewModel, JToken items, List<CommentViewModel> commentList,
             JObject convertToJson, string videoId, HttpClient client)
         {
             AddComment(items, commentList);
@@ -79,7 +137,7 @@ namespace CommentDownloader.Controllers
                 var nextPageToken = pageToken;
 
                 var newCommentUrl =
-                    $"/youtube/v3/commentThreads?part=snippet&maxResults=100&order=time&pageToken={nextPageToken}&videoId={videoId}&key=AIzaSyDcXc9agwa4geoXqMmHj2gTea10BvxvX_0";
+                    $"/youtube/v3/commentThreads?part=snippet&maxResults=100&order=time&pageToken={nextPageToken}&videoId={videoId}&key=[Key]";
 
                 var newTask = client.GetAsync(newCommentUrl);
                 newTask.Wait();
@@ -90,15 +148,20 @@ namespace CommentDownloader.Controllers
 
                 var newItems = newConvertToJson["items"];
 
-                pageToken = String.Empty;
+                pageToken = string.Empty;
 
                 AddComment(newItems, commentList);
 
                 var newPageToken = (string) newConvertToJson["nextPageToken"];
                 pageToken = newPageToken;
-
-                if (pageToken == null)
+                if (commentList.Count == 100000)
+                {
                     break;
+                }
+
+                if (pageToken == null)  
+                    break;
+             
             }
 
 
@@ -108,46 +171,66 @@ namespace CommentDownloader.Controllers
 
         private static void AddComment(JToken items, List<CommentViewModel> commentList)
         {
-            foreach (var item in items)
+            try
             {
-                var vm = new CommentViewModel
+                
+                foreach (var item in items)
                 {
-                    UserName = (string) item["snippet"]["topLevelComment"]["snippet"]["authorDisplayName"],
-                    DateTime = DateTime
-                        .Parse((string) item["snippet"]["topLevelComment"]["snippet"]["publishedAt"])
-                        .ToString("yyyy MMMM dd"),
-                    Comment = (string) item["snippet"]["topLevelComment"]["snippet"]["textOriginal"],
-                    StarRating = (string) item["snippet"]["topLevelComment"]["snippet"]["viewerRating"],
-                    Link = (string) item["snippet"]["topLevelComment"]["snippet"]["authorChannelUrl"]
-                };
-                commentList.Add(vm);
+                    
+
+                    var vm = new CommentViewModel
+                    {
+                        UserName = (string)item["snippet"]["topLevelComment"]["snippet"]["authorDisplayName"],
+                        DateTime = DateTime
+                            .Parse((string)item["snippet"]["topLevelComment"]["snippet"]["publishedAt"])
+                            .ToString("yyyy MMMM dd"),
+                        Comment = (string)item["snippet"]["topLevelComment"]["snippet"]["textOriginal"],
+                        StarRating = (string)item["snippet"]["topLevelComment"]["snippet"]["viewerRating"],
+                        Link = (string)item["snippet"]["topLevelComment"]["snippet"]["authorChannelUrl"]
+                    };
+                    commentList.Add(vm);
+                 
+                }
+                
+            }
+            catch (Exception e)
+            {
+                InputViewModel.ErrorMessage = "sorry, error occur while loading comments";
+
             }
         }
 
         private static void ConvertToCsv(IEnumerable<CommentViewModel> commentList)
         {
-            var filepath = Environment.GetFolderPath(Environment.SpecialFolder.MyMusic) + @"\new.csv";
-            if (System.IO.File.Exists(filepath))
-                System.IO.File.Delete(filepath);
-            var csv = new StringBuilder();
-            csv.AppendLine($"{"Name"},{"Date"},{"Star Rating"},{"Comment"},{"Link"}");
-
-            foreach (var item in commentList)
+            try
             {
-                var username = item.UserName;
-                var date = item.DateTime;
-                var starRating = (item.StarRating.Contains("none")) ? " " : item.StarRating;
-                var comment = item.Comment;
-                var link = (item.Link.Contains("none")) ? " " : item.Link;
+                   // System.IO.File.Create(filepath).Close();
 
-                var newLine = $"{username},{date},{starRating},{comment},{link}";
-                var formatted = RemoveLineEndings(newLine);
-                csv.AppendLine(formatted);
+                var csv = new StringBuilder();
+                csv.AppendLine($"{"Name"},{"Date"},{"Star Rating"},{"Comment"},{"Link"}");
+
+                foreach (var item in commentList)
+                {
+                    var username = item.UserName;
+                    var date = item.DateTime;
+                    var starRating = (item.StarRating.Contains("none")) ? " " : item.StarRating;
+                    var comment = item.Comment;
+                    var link = (item.Link.Contains("none")) ? " " : item.Link;
+
+                    var newLine = $"{username},{date},{starRating},{comment},{link}";
+                    var formatted = RemoveLineEndings(newLine);
+                    csv.AppendLine(formatted);
+                }
+                var filepath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"/new234.csv";               
+                System.IO.File.Open(filepath, FileMode.OpenOrCreate, FileAccess.ReadWrite);
+                 System.IO.File.AppendAllText(filepath, csv.ToString());
             }
-
-            
-
-           System.IO.File.AppendAllText(filepath, csv.ToString());
+            catch (Exception e)
+            {
+                InputViewModel.ErrorMessage = "Error occur while saving comments.";
+                InputViewModel.ErrorMessage += e.Message;
+            }
+           
         }
 
 
