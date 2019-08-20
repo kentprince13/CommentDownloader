@@ -1,16 +1,55 @@
-﻿@using System.Web.UI.WebControls
-@model CommentDownloader.Models.InputViewModel
+﻿@model CommentDownloader.Models.InputViewModel
 
 @{
     ViewBag.Title = "Youtube downloader";
    
 }
 
-<h2>YouTube Downoad</h2>
+<h2>YouTube Download</h2>
 @using(Html.BeginForm("Comment", "Comment"))
 { 
     <div class="form-group">
         @Html.TextBoxFor( m=>m.InputUrl, new{@id ="urlTxt",@placeholder="Enter URL...", @class ="form-control"})
     </div>
-    <input type="submit" class="btn btn-primary" name="name" value="Submit" />
+    <input type="submit" id="b" class="btn a btn-primary" name="name" value="Submit" />
+}
+@section scripts
+{
+    <script>
+        console.log("haaaaaa");
+        
+        $.ajax({
+            url: "~/api/no/",
+            method: "GET",
+            success: function(result) {
+                console.log(result);
+            },
+            fail: function() {
+                console.log("Something failed");
+            }
+
+
+        });
+
+        $(document).ready(function() {
+            $(".a","#b").click(
+                function() {
+                    console.log("Something failed");
+
+                    $.ajax({
+                        url: "~/api/no/",
+                        method: "GET",
+                        success: function(result) {
+                            console.log(result);
+                        },
+                        fail: function() {
+                            console.log("Something failed");
+                        }
+
+
+                    });
+                });
+
+        })
+    </script>
 }

@@ -2,9 +2,13 @@
 using System.Collections;
 using System.IO;
 using System.Collections.Generic;
+using System.IO.IsolatedStorage;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.AccessControl;
+using System.Security.Permissions;
+using System.Security.Principal;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
@@ -13,12 +17,23 @@ using CommentDownloader.Models;
 using HtmlAgilityPack;
 using Microsoft.Ajax.Utilities;
 using Newtonsoft.Json.Linq;
+using WebGrease.Activities;
 
 namespace CommentDownloader.Controllers
 {
     public class CommentController : Controller
     {
-      
+
+        public string doIt()
+        {
+            var mapPath = Server.MapPath(Path.Combine("~/new/", "new234.csv"));
+            var filepath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"/new/new234.csv");
+
+            var path = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"/new234.csv";
+            return $@"{path} : {filepath} : {mapPath}";
+
+        }
+
         public ActionResult Index()
         {
             return View();
@@ -35,10 +50,8 @@ namespace CommentDownloader.Controllers
 
                 string authority = new UriBuilder(uri).Uri.Authority.ToLower();
 
-                //check if the url is a youtube url
                 if (validAuthorities.Contains(authority))
                 {
-                    //and extract the id
                     var regRes = regexExtractId.Match(uri.ToString());
                     if (regRes.Success)
                     {
@@ -55,9 +68,13 @@ namespace CommentDownloader.Controllers
 
             return null;
         }
+
+
+
         [HttpPost]
         public ActionResult Comment(InputViewModel viewModel)
         {
+            
             try
             {
                 var videoUrl = viewModel.InputUrl;
@@ -82,7 +99,7 @@ namespace CommentDownloader.Controllers
 
                 var videoId = (firstUrlFormatId.IsNullOrWhiteSpace()) ? otherUrlFormatId : urlStrings[1];
 
-                var youTubeUrl = $"/youtube/v3/commentThreads?part=snippet&maxResults=100&order=time&videoId={videoId}&key=[key]";
+                var youTubeUrl = $"/youtube/v3/commentThreads?part=snippet&maxResults=100&order=time&videoId={videoId}&key=AIzaSyDcXc9agwa4geoXqMmHj2gTea10BvxvX_0";
                 YouTubeComments(viewModel, youTubeUrl, videoId);
 
                 return View("Notify", viewModel);
@@ -98,7 +115,9 @@ namespace CommentDownloader.Controllers
            
         }
 
-        private static void YouTubeComments(InputViewModel viewModel, string youTubeUrl, string videoId)
+
+
+        private void YouTubeComments(InputViewModel viewModel, string youTubeUrl, string videoId)
         {
             using (var client = new HttpClient())
             {
@@ -125,7 +144,8 @@ namespace CommentDownloader.Controllers
         }
 
 
-        private static void ProcessMoreYouTubeComments(InputViewModel viewModel, JToken items, List<CommentViewModel> commentList,
+
+        private void ProcessMoreYouTubeComments(InputViewModel viewModel, JToken items, List<CommentViewModel> commentList,
             JObject convertToJson, string videoId, HttpClient client)
         {
             AddComment(items, commentList);
@@ -137,7 +157,7 @@ namespace CommentDownloader.Controllers
                 var nextPageToken = pageToken;
 
                 var newCommentUrl =
-                    $"/youtube/v3/commentThreads?part=snippet&maxResults=100&order=time&pageToken={nextPageToken}&videoId={videoId}&key=[Key]";
+                    $"/youtube/v3/commentThreads?part=snippet&maxResults=100&order=time&pageToken={nextPageToken}&videoId={videoId}&key=AIzaSyDcXc9agwa4geoXqMmHj2gTea10BvxvX_0";
 
                 var newTask = client.GetAsync(newCommentUrl);
                 newTask.Wait();
@@ -169,7 +189,9 @@ namespace CommentDownloader.Controllers
             viewModel.CommentLength = commentList.Count;
         }
 
-        private static void AddComment(JToken items, List<CommentViewModel> commentList)
+
+
+        private  void AddComment(JToken items, List<CommentViewModel> commentList)
         {
             try
             {
@@ -200,7 +222,9 @@ namespace CommentDownloader.Controllers
             }
         }
 
-        private static void ConvertToCsv(IEnumerable<CommentViewModel> commentList)
+
+
+        private void ConvertToCsv(IEnumerable<CommentViewModel> commentList)
         {
             try
             {
@@ -221,9 +245,17 @@ namespace CommentDownloader.Controllers
                     var formatted = RemoveLineEndings(newLine);
                     csv.AppendLine(formatted);
                 }
-                var filepath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"/new234.csv";               
-                System.IO.File.Open(filepath, FileMode.OpenOrCreate, FileAccess.ReadWrite);
-                 System.IO.File.AppendAllText(filepath, csv.ToString());
+
+               
+                var mapPath = Server.MapPath(Path.Combine("~/new/","new234.csv"));
+                var filepath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, @"/Users/new/new234.csv");
+
+                var path = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments) + @"/new234.csv"; 
+                
+                //System.IO.File.Open(mapPath, FileMode.OpenOrCreate, FileAccess.ReadWrite).Close();
+              //  FileIOPermission(FileIOPermissionAccess.Write, @"/new/new234.csv");
+
+                 System.IO.File.AppendAllText(path, csv.ToString());
             }
             catch (Exception e)
             {
@@ -234,7 +266,8 @@ namespace CommentDownloader.Controllers
         }
 
 
-        public static string RemoveLineEndings(string value)
+        
+        public  string RemoveLineEndings(string value)
         {
             if (string.IsNullOrEmpty(value))
             {
@@ -249,6 +282,54 @@ namespace CommentDownloader.Controllers
                 .Replace(lineSeparator, string.Empty)
                 .Replace(paragraphSeparator, string.Empty);
         }
+
+
+
+
+
+
+
+
+        public ActionResult CheckAction(InputViewModel viewModel)
+        {
+
+            try
+            {
+                FileSecurity sec = System.IO.File.GetAccessControl(@"d:\new");
+                AuthorizationRuleCollection rules = sec.GetAccessRules(true, true,
+                    typeof(NTAccount));
+                foreach (FileSystemAccessRule rule in rules)
+                {
+                    InputViewModel.ErrorMessage = rule.AccessControlType.ToString(); // Allow or Deny
+                    InputViewModel.ErrorMessage = rule.FileSystemRights.ToString(); // e.g., FullControl
+                    InputViewModel.ErrorMessage = rule.IdentityReference.Value.ToString(); // e.g., MyDomain/Joe
+                }
+                var sid = new SecurityIdentifier(WellKnownSidType.BuiltinUsersSid, null);
+                string usersAccount = sid.Translate(typeof(NTAccount)).ToString();
+                FileSystemAccessRule newRule = new FileSystemAccessRule
+                    (usersAccount, FileSystemRights.ExecuteFile, AccessControlType.Allow);
+                sec.AddAccessRule(newRule);
+                System.IO.File.SetAccessControl(@"d:\new", sec);
+
+
+
+            }
+            catch (Exception e)
+            {
+                InputViewModel.ErrorMessage = "Another Error occur while playing ";
+                InputViewModel.ErrorMessage += e.Message;
+            }
+            return View("Notify", viewModel);
+        }
+
+
+
+
+
+
+
+
+
 
         public ActionResult AmazonReview()
         {
